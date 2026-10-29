@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 1. METADATA CATALOG & AUDIT DATABASE (PostgreSQL 15)
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: hiveflow-metadata-db
+    environment:
+      POSTGRES_DB: hiveflow_metadata
+      POSTGRES_USER: hiveflow_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hiveflow_dev_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hiveflow_admin -d hiveflow_metadata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hiveflow-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 2. APACHE SPARK MASTER (Spark 3.5 with Spark Connect)
+  # ─────────────────────────────────────────────────────────────────────────────
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: hiveflow-spark-master
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+      - "15002:15002"
+    networks:
+      - hiveflow-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 3. FASTAPI CONTROL PLANE REST API
+  # ─────────────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: hiveflow-api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=hiveflow_metadata
+      - DB_USER=hiveflow_admin
+      - DB_PASSWORD=${DB_PASSWORD:-hiveflow_dev_secret}
+      - METADATA_DB_PASSWORD=${DB_PASSWORD:-hiveflow_dev_secret}
+      - SPARK_CONNECT_URL=sc://spark-master:15002
+      - APP_ENV=local
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - hiveflow-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 4. REACT OPERATIONAL DASHBOARD GUI
+  # ─────────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hiveflow-console
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - hiveflow-network
+
+networks:
+  hiveflow-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

@@ -1,0 +1,63 @@
+spark:
+  app_name: "GenericETLPipeline"
+  master: "local[*]"
+  executor_memory: "4g"
+  driver_memory: "2g"
+  executor_cores: 1
+  dynamic_allocation: false
+  log_level: "WARN"
+  extra_configs:
+    spark.driver.extraClassPath: "C:/opt/ETL/jars/ojdbc8.jar"
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.sql.shuffle.partitions: "10"
+    spark.sql.parquet.compression.codec: "snappy"
+    spark.sql.parquet.datetimeRebaseModeInWrite: "CORRECTED"
+    spark.sql.parquet.datetimeRebaseModeInRead: "CORRECTED"
+    spark.sql.parquet.int96RebaseModeInWrite: "CORRECTED"
+    spark.sql.parquet.int96RebaseModeInRead: "CORRECTED"
+    parquet.block.size: "134217728"
+
+paths:
+  landing_base: "file:///opt/shared/data/landing"
+  history_base: "file:///opt/shared/data/history"
+  target_base: "file:///opt/shared/data/target"
+  checkpoint_base: "file:///opt/shared/data/checkpoints"
+
+database_ini_path: "config/databases.ini.deprecated"
+metadata_db_section: "RepositoryDB"
+
+repository_db:
+  host: "${DB_HOST}"
+  port: "5432"
+  database: "opf"
+  username: "mg"
+  password: "${METADATA_DB_PASSWORD}"
+  schema: "metadata"
+
+pipeline:
+  required_schema_version: "3.0.0"
+  default_chunk_size: 10000
+  default_num_partitions: 5
+  max_parallel_tables: 2
+  target_file_size_mb: 128
+  parquet_block_size: 134217728
+  audit_columns:
+    - dml_timestamp
+    - dml_status
+    - source_tag
+    - source_identification_key
+    - source_identification_table
+    - pipeline_run_id
+  default_dml_status: 1
+  runtime_settings:
+    dispatch_lease_timeout_sec: 60
+    worker_heartbeat_timeout_sec: 120
+    publication_timeout_sec: 300
+    target_lock_timeout_ms: 15000
+  # Bounded exception identity keeps a mostly-unique key incremental while
+  # explicitly preserving a small, typed set of exceptional key values.
+  conditional_key_policy:
+    max_exception_values: 5
+    max_exception_rows: 10000
+    max_exception_fraction: 0.005

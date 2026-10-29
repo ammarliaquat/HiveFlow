@@ -1,0 +1,28 @@
+# ==============================================================================
+# HIVEFLOW PLATFORM — CORE PYTHON DEPENDENCIES
+# ==============================================================================
+
+# Spark & Distributed Processing
+pyspark>=3.5.0
+
+# FastAPI REST API Control Plane
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+
+# Database Drivers & Connectors
+psycopg2-binary>=2.9.9
+PyMySQL>=1.1.0
+cryptography>=42.0.0
+bcrypt>=4.1.2
+
+# Configuration, Utilities & Timezones
+PyYAML>=6.0.1
+pytz>=2024.1
+requests>=2.31.0
+httpx>=0.27.0
+
+# Testing & Quality Gates
+pytest>=8.0.0
+pytest-mock>=3.12.0

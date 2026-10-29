@@ -1,0 +1,105 @@
+﻿# ==============================================================================
+# HIVEFLOW PLATFORM — PRODUCTION GITIGNORE
+# ==============================================================================
+
+# Environment & Secrets (STRICTLY FORBIDDEN FROM COMMITS)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+databases.ini
+*.deprecated_backup
+
+# Python & Caching
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+htmlcov/
+
+# Virtual Environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Runtime Data, Storage & Medallion Buffers
+*.parquet
+*.snappy.parquet
+*.csv
+exports/
+data/
+landing/
+history/
+target/
+checkpoints/
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime Logging & Metrics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node & Frontend Build Artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE & Editor Local State
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Internal Agent & Workspace Caches
+.gemini/
+.agents/
+.brain/
+.antigravity/
+scratch/
