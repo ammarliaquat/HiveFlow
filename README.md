@@ -164,6 +164,22 @@ pytest tests/ -v
 
 ---
 
+## 📚 Documentation & Technical Manuals
+
+Comprehensive guides and architectural references are available in the [`docs/`](docs/) directory:
+
+| Document | Description |
+| :--- | :--- |
+| [**Data Engineering Concepts Implemented**](docs/CONCEPTS_IMPLEMENTED.md) | In-depth breakdown of 30+ enterprise data engineering concepts implemented across the pipeline (Medallion, CDC, Dynamic Schema, Adaptive Partitioning). |
+| [**ETL Execution Manual**](docs/ETL_EXECUTION_MANUAL.md) | Operational execution guide for CLI execution (`app_etl.py`), crawler syncing, table promotion, and restatement. |
+| [**ETL Pipeline Reference**](docs/ETL_PIPELINE_REFERENCE.md) | Detailed contract and parameter reference across Bronze, Silver, and Gold execution stages. |
+| [**Medallion Architecture Blueprint**](docs/MEDALLION_ARCHITECTURE.md) | Deep-dive explainer on the raw landing, historical deduplication, and atomic Gold persistence tiers. |
+| [**User & Operator Operations Manual**](docs/USER_OPERATIONS_MANUAL.md) | Comprehensive walkthrough of the control plane, user credentials, RBAC management, and forensic activity observer. |
+| [**Comprehensive Data Engineering Guide**](docs/DATA_ENGINEERING_CONCEPTS.md) | 160KB+ reference manual of data architecture, distributed compute, and storage patterns. |
+| [**Server & Deployment Operations Manual**](docs/SERVER_OPERATIONS_MANUAL.md) | Infrastructure provisioning, Docker, Spark Connect setup, and environment hardening. |
+
+---
+
 ## 🛡️ Security & Zero-Hardcoding Guarantee
 
 HiveFlow strictly conforms to zero-hardcoding architectural rules:
