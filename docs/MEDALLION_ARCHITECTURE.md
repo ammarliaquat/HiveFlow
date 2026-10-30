@@ -52,7 +52,7 @@ flowchart LR
 
 #### 💼 Business Perspective: The Safety Net
 The primary business goal of the Bronze layer is **risk mitigation and historical preservation**. 
-- **Zero Data Loss Guarantee**: When we extract data from source operational databases (like ERP, CRM, or hospital billing systems), we capture an exact, immutable snapshot of what the source system looked like on that day.
+- **Zero Data Loss Guarantee**: When we extract data from source operational databases (like ERP, CRM, or transactional billing systems), we capture an exact, immutable snapshot of what the source system looked like on that day.
 - **Audit & Compliance**: If financial auditors or regulatory bodies ask, *"What did our customer database look like exactly on March 15th three years ago?"*, the Bronze layer answers instantly without needing backup tapes.
 - **Source Shielding**: We extract from production databases **once and only once**. If a data scientist or business analyst wants to test a new calculation, they experiment on the Bronze data without ever putting extra CPU load on live transactional databases.
 

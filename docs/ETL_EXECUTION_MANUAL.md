@@ -7,7 +7,7 @@ Operational execution manual and reference guide for both **CLI commands** and t
 >
 > **Streamlit Operations Dashboard (GUI)**: In addition to CLI tools, the pipeline includes an interactive 13-page web console (`streamlit run gui/app.py`) for live monitoring, metadata management, catalog promotion, connection testing, and job execution.
 >
-> **Governance Enforcement ([ADR-003](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-003_two_tier_catalog.md))**: Automated catalog discovery writes exclusively to Tier 1 (`metadata.db_tables`). The `--activate` CLI bypass flag is disabled. Promoting tables to active execution status in Tier 2 (`metadata.db_tables_etl`) requires explicit human steward promotion via `python jobs/promote_table.py` or the GUI Discovery & Promotion panel (`Page 07`).
+> **Governance Enforcement ([ADR-003])**: Automated catalog discovery writes exclusively to Tier 1 (`metadata.db_tables`). The `--activate` CLI bypass flag is disabled. Promoting tables to active execution status in Tier 2 (`metadata.db_tables_etl`) requires explicit human steward promotion via `python jobs/promote_table.py` or the GUI Discovery & Promotion panel (`Page 07`).
 
 ---
 
@@ -43,7 +43,7 @@ user = hiveflow_admin
 password = ${META_PASSWORD}
 port = 5432
 
-[land_n]
+[target_warehouse]
 role = target
 env = prod
 db_type = PostgresSQL
@@ -51,15 +51,15 @@ server = postgres-dw
 database = hiveflow_metadata
 schema = analytics_dw
 user = hiveflow_admin
-password = ${LAND_N_PASSWORD}
+password = ${TARGET_PASSWORD}
 port = 5432
 ```
 
 Export required credential variables before running any workloads:
 ```bash
 export META_PASSWORD="your_metadata_password"
-export LAND_N_PASSWORD="your_target_password"
-export MSOPFORG_PASSWORD="your_source_password"
+export TARGET_PASSWORD="your_target_password"
+export SOURCE_PASSWORD="your_source_password"
 ```
 
 ---
@@ -72,7 +72,7 @@ Provides instant fail-fast verification of metadata catalogs, connection configs
 
 **Fast Metadata Catalog Validation (`--validate-only`)**
 ```bash
-python jobs/app_etl.py --validate-only --source_tag msopforg_opforg
+python jobs/app_etl.py --validate-only --source_tag source_mysql
 ```
 - **Action:** Runs `MetadataValidator` SQL checks against active metadata rows (`metadata.db_tables_etl`, `metadata.db_columns_etl`).
 - **Success Output:** `Status: [ OK ] VALID` report confirming zero missing columns or unmapped data types.
@@ -94,19 +94,19 @@ Inspects raw source database catalogs via JDBC and registers discovered structur
 
 **Dry-Run Schema Discovery**
 ```bash
-python jobs/discover_and_promote.py --source_tag msopforg_opforg --target_tag land_n --dry-run
+python jobs/discover_and_promote.py --source_tag source_mysql --target_tag target_warehouse --dry-run
 ```
 - **Action:** Scans source schema and previews catalog changes without editing database records.
 
 **Execute Master Catalog Discovery**
 ```bash
-python jobs/discover_and_promote.py --source_tag msopforg_opforg --target_tag land_n
+python jobs/discover_and_promote.py --source_tag source_mysql --target_tag target_warehouse
 ```
 - **Action:** Crawls source database, inserting new objects into Tier 1 Master Catalog (`metadata.db_tables`) with `is_active='n'`.
 
 **Review Recently Discovered Objects**
 ```bash
-python jobs/review_discovered.py --source_tag msopforg_opforg --days 7
+python jobs/review_discovered.py --source_tag source_mysql --days 7
 ```
 - **Action:** Displays newly cataloged tables and columns pending human steward review.
 
@@ -114,31 +114,31 @@ python jobs/review_discovered.py --source_tag msopforg_opforg --days 7
 
 ## 4. Step 3: Human Steward Promotion (`promote_table.py`)
 
-Enforces [**ADR-003**](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-003_two_tier_catalog.md). Promotes cataloged tables from Tier 1 (`metadata.db_tables`) to active Tier 2 Execution Control (`metadata.db_tables_etl`).
+Enforces [**ADR-003**]. Promotes cataloged tables from Tier 1 (`metadata.db_tables`) to active Tier 2 Execution Control (`metadata.db_tables_etl`).
 
 ### Commands
 
 **Promote All Cataloged Tables for a Source**
 ```bash
-python jobs/promote_table.py --source_tag msopforg_opforg --target_tag land_n --all --priority 2
+python jobs/promote_table.py --source_tag source_mysql --target_tag target_warehouse --all --priority 2
 ```
 - **Action:** Promotes all discovered tables to Tier 2 with Priority 2 (`is_active='y'`).
 
 **Promote Single Table**
 ```bash
-python jobs/promote_table.py --source_tag msopforg_opforg --target_tag land_n --table memberships --priority 1
+python jobs/promote_table.py --source_tag source_mysql --target_tag target_warehouse --table customers --priority 1
 ```
-- **Action:** Promotes `memberships` table to Tier 2 with Priority 1.
+- **Action:** Promotes `customers` table to Tier 2 with Priority 1.
 
 **Force Refresh Promoted Columns**
 ```bash
-python jobs/promote_table.py --source_tag msopforg_opforg --target_tag land_n --table memberships --force
+python jobs/promote_table.py --source_tag source_mysql --target_tag target_warehouse --table customers --force
 ```
 - **Action:** Overwrites active column mapping definitions in `db_columns_etl` with latest source schema facts.
 
 **Audit Schema Drift**
 ```bash
-python jobs/promote_table.py --source_tag msopforg_opforg --target_tag land_n --drift-check
+python jobs/promote_table.py --source_tag source_mysql --target_tag target_warehouse --drift-check
 ```
 - **Action:** Reports structural column additions, deletions, or data type changes between source database and active metadata.
 
@@ -152,13 +152,13 @@ Provisions target PostgreSQL database table DDL syntax (`CREATE TABLE IF NOT EXI
 
 **Dry-Run Target DDL Generation**
 ```bash
-python jobs/auto_configure_target.py --source_tag msopforg_opforg --target_schema land_n --tables memberships --dry-run
+python jobs/auto_configure_target.py --source_tag source_mysql --target_schema target_warehouse --tables customers --dry-run
 ```
 - **Action:** Previews generated target PostgreSQL DDL SQL syntax.
 
 **Execute Target DDL Schema Provisioning**
 ```bash
-python jobs/auto_configure_target.py --source_tag msopforg_opforg --target_schema land_n --tables memberships
+python jobs/auto_configure_target.py --source_tag source_mysql --target_schema target_warehouse --tables customers
 ```
 - **Action:** Creates target table schema in target database and registers active column maps.
 
@@ -172,19 +172,19 @@ Unified CLI runner for executing production data pipelines across Bronze (Landin
 
 **Full Pipeline Execution (Bronze → Silver → Gold)**
 ```bash
-python jobs/app_etl.py --action run_pipeline --source_tag msopforg_opforg --priority 1
+python jobs/app_etl.py --action run_pipeline --source_tag source_mysql --priority 1
 ```
 - **Action:** Processes active Priority 1 tables through Bronze Parquet landing, Silver history deduplication, and Gold CDC UPSERT. Downstream layers respect exact table dependencies (`eligible_tables`).
 
 **Process Single Table**
 ```bash
-python jobs/app_etl.py --action run_pipeline --source_tag msopforg_opforg --priority 1 --table memberships
+python jobs/app_etl.py --action run_pipeline --source_tag source_mysql --priority 1 --table customers
 ```
-- **Action:** Executes full Medallion pipeline for `memberships` table only.
+- **Action:** Executes full Medallion pipeline for `customers` table only.
 
 **Bronze Landing Only (Skip Silver/Gold)**
 ```bash
-python jobs/app_etl.py --action run_landing --source_tag msopforg_opforg --priority 1
+python jobs/app_etl.py --action run_landing --source_tag source_mysql --priority 1
 ```
 - **Action:** Extracts JDBC data into raw Snappy-compressed Parquet files under `/data/landing/` without running Silver/Gold.
 
@@ -198,7 +198,7 @@ Applies incremental updates from Silver history to Gold target tables using wate
 
 **Execute Gold CDC Ingestion**
 ```bash
-python jobs/app_etl.py --action run_target --source_tag msopforg_opforg
+python jobs/app_etl.py --action run_target --source_tag source_mysql
 ```
 - **Action:** Queries watermarks, extracts mutated rows, and executes incremental UPSERT/MERGE operations.
 
@@ -212,7 +212,7 @@ Re-cleanses and restates Silver history tables directly from existing Bronze Par
 
 **Backfill Silver Priority Tier**
 ```bash
-python jobs/app_etl.py --action run_history --source_tag msopforg_opforg --priority 1
+python jobs/app_etl.py --action run_history --source_tag source_mysql --priority 1
 ```
 - **Action:** Reads landed Bronze Parquet data, applies column type casting and business key deduplication, and rewrites clean Silver dataset.
 
@@ -226,19 +226,19 @@ Emergency operational controls for inspecting run logs, clearing watermarks, and
 
 **Inspect Current Table Watermark & Status**
 ```bash
-python jobs/app_etl.py --action fix --operation check_watermark --source_tag msopforg_opforg --table memberships
+python jobs/app_etl.py --action fix --operation check_watermark --source_tag source_mysql --table customers
 ```
 - **Action:** Prints `last_success_date`, `rerun_flag`, and `last_success_timestamp`.
 
 **Queue Table for Immediate Rerun**
 ```bash
-python jobs/app_etl.py --action fix --operation rerun --source_tag msopforg_opforg --table memberships
+python jobs/app_etl.py --action fix --operation rerun --source_tag source_mysql --table customers
 ```
 - **Action:** Flips `rerun_flag = 'y'`, queuing table for re-processing during the next pipeline execution.
 
 **Reset CDC Watermark**
 ```bash
-python jobs/app_etl.py --action fix --operation reset_watermark --source_tag msopforg_opforg --table memberships
+python jobs/app_etl.py --action fix --operation reset_watermark --source_tag source_mysql --table customers
 ```
 - **Action:** Clears watermark timestamps, forcing the next Gold run to execute a complete reload.
 
@@ -282,7 +282,7 @@ streamlit run gui/app.py
 | **04** | **`04_Run_History.py`** | **Batch Log Audit Trail:** Searchable, paginated audit trail of all `metadata.batch_log` executions with source/target row counts, processing time, status filters, and CSV export. |
 | **05** | **`05_Pipeline_Summary.py`** | **Pipeline Aggregated Analytics:** Plotly performance trend charts, duration percentiles, layer load distributions, and batch summary metrics. |
 | **06** | **`06_Notification_Center.py`** | **Alerts & Telemetry:** Configurable Slack/Email webhook notifications, log event stream inspector, and alert history. |
-| **07** | **`07_Discovery_Promotion.py`** | **Discovery Crawler & Promotion Panel ([ADR-003](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-003_two_tier_catalog.md)):** UI for running schema crawlers on source databases, viewing Tier 1 cataloged tables (`db_tables`), and performing human steward promotion to Tier 2 (`db_tables_etl`). |
+| **07** | **`07_Discovery_Promotion.py`** | **Discovery Crawler & Promotion Panel ([ADR-003]):** UI for running schema crawlers on source databases, viewing Tier 1 cataloged tables (`db_tables`), and performing human steward promotion to Tier 2 (`db_tables_etl`). |
 | **08** | **`08_Connection_Manager.py`** | **Database Profile Manager:** Visual editor for connection sections in `databases.ini`, role assignment (`source`/`target`), and live JDBC ping test functionality. |
 | **09** | **`09_Execute_Pipeline.py`** | **Interactive Job Launcher:** Visual trigger interface for initiating `run_pipeline`, `run_landing`, `run_history`, or `run_target` workloads with parameter sliders and single-table target selectors. |
 | **10** | **`10_Job_Queue.py`** | **Active Task Monitor:** Monitor running and queued PySpark sub-processes, thread concurrency limits, and cancel hung tasks. |
@@ -297,8 +297,8 @@ streamlit run gui/app.py
 <!-- BEGIN_PARAMETER_DESCRIPTIONS -->
 | Parameter | Data Type | Choices / Default | Description | Required? |
 |---|---|---|---|---|
-| `--source_tag` | `String` | - | Source system tag — must match a section name in databases.ini (e.g., source_erp_db). Required for all actions except 'fix --operation status'. | ❌ No |
-| `--target_tag` | `String` | - | Optional target tag override (e.g., land_test for DEV, land_n for PROD). Routes target writes to this database connection. | ❌ No |
+| `--source_tag` | `String` | - | Source system tag — must match a section name in databases.ini (e.g., source_mysql). Required for all actions except 'fix --operation status'. | ❌ No |
+| `--target_tag` | `String` | - | Optional target tag override (e.g., target_dev for DEV, target_warehouse for PROD). Routes target writes to this database connection. | ❌ No |
 | `--action` | `String` | Choices: `['run_landing', 'run_history', 'run_target', 'run_pipeline', 'run_governed', 'sync', 'fix', 'healthcheck']` | Pipeline action to run:   run_landing             — Extracts raw data (Bronze)   run_history             — Deduplicates/Appends to history (Silver)   run_target              — Performs UPSERT/MERGE to PostgreSQL (Gold)   run_pipeline            — End-to-end (Bronze -> Silver -> Gold)   sync                    — Discover and auto-promote metadata   fix                     — Emergency operations   healthcheck             — Run diagnostic checks on DBs, schema & metadata | ❌ No |
 | `--validate-only` | `Boolean` | - | Run pre-flight metadata validation and exit immediately (overrides --action). If --source_tag is omitted, validates all active tables across all tags. | ❌ No |
 | `--config` | `String` | Default: `config/config.yaml` | Path to YAML config file (default: config/config.yaml) | ❌ No |

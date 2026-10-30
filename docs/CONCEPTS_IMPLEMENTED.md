@@ -47,7 +47,7 @@
 **Why it matters**: Isolates downstream analytical workloads from source system schema changes, raw extraction errors, and network outages while ensuring full historical auditability.
 
 **Project Implementation**:
-- **File**: [`src/orchestrator/etl.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/orchestrator/etl.py#L320-L750)
+- **File**: [`src/orchestrator/etl.py`](../src/orchestrator/etl.py#L320-L750)
 - **Code Snippet**:
   ```python
   # Bronze: Raw extraction from source via JDBC to Parquet landing path
@@ -75,9 +75,9 @@ flowchart LR
 **Example in Action**:
 ```text
 INFO  [Landing] load_with_db_link  priority=1  tag=oracle_opf
-INFO  [tblop_jandec25100626] Starting BRONZE_WRITE: 633,967 rows → Parquet
-INFO  [tblop_jandec25100626] Starting SILVER_WRITE: 633,967 rows → Delta/Parquet history
-INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC merge)
+INFO  [sales_orders] Starting BRONZE_WRITE: 633,967 rows → Parquet
+INFO  [sales_orders] Starting SILVER_WRITE: 633,967 rows → Delta/Parquet history
+INFO  [sales_orders] Starting GOLD_WRITE: 633,967 rows → target (CDC merge)
 ```
 
 ---
@@ -89,7 +89,7 @@ INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC m
 **Why it matters**: Eliminates code modifications when onboarding new tables or updating database schemas. Adding a new table requires a single metadata table entry.
 
 **Project Implementation**:
-- **File**: [`src/metadata/metadata_reader.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/metadata_reader.py#L43-L105)
+- **File**: [`src/metadata/metadata_reader.py`](../src/metadata/metadata_reader.py#L43-L105)
 - **Code Snippet**:
   ```python
   SELECT
@@ -118,7 +118,7 @@ INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC m
 **Why it matters**: Avoids single-threaded JDBC bottlenecks. Extracted 633,967 rows from Oracle in **7.8 seconds** across 20 parallel threads.
 
 **Project Implementation**:
-- **File**: [`src/extract/extractor.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/extract/extractor.py#L170-L210)
+- **File**: [`src/extract/extractor.py`](../src/extract/extractor.py#L170-L210)
 - **Code Snippet**:
   ```python
   primary_col = part_col.split(",")[0].strip()
@@ -141,7 +141,7 @@ INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC m
 **Why it matters**: Provides high compression and columnar speed for Bronze reads while supporting time-travel and ACID transactional guarantees for Silver writes.
 
 **Project Implementation**:
-- **File**: [`src/load/loader.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/load/loader.py#L65-L85)
+- **File**: [`src/load/loader.py`](../src/load/loader.py#L65-L85)
 - **Code Snippet**:
   ```python
   if self._delta_available:
@@ -159,7 +159,7 @@ INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC m
 **Why it matters**: Guarantees record-level lineage back to the original pipeline run, batch ID, and source table.
 
 **Project Implementation**:
-- **File**: [`src/transform/transformer.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/transform/transformer.py#L30-L50)
+- **File**: [`src/transform/transformer.py`](../src/transform/transformer.py#L30-L50)
 - **Code Snippet**:
   ```python
   def add_source_identification_key(self, df: DataFrame, meta: MetadataRow) -> DataFrame:
@@ -179,7 +179,7 @@ INFO  [tblop_jandec25100626] Starting GOLD_WRITE: 633,967 rows → target (CDC m
 **Why it matters**: Reduces daily extraction volumes by 95%+, shifting processing times from hours to seconds for large enterprise tables.
 
 **Project Implementation**:
-- **File**: [`src/cdc/cdc_handler.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/cdc/cdc_handler.py#L40-L75)
+- **File**: [`src/cdc/cdc_handler.py`](../src/cdc/cdc_handler.py#L40-L75)
 - **Code Snippet**:
   ```python
   if meta.last_success_timestamp:
@@ -210,7 +210,7 @@ flowchart TD
 **Why it matters**: Prevents corrupt pipelines from silently overwriting clean production target databases.
 
 **Project Implementation**:
-- **File**: [`src/validation/reconciler.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/validation/reconciler.py#L130-L160)
+- **File**: [`src/validation/reconciler.py`](../src/validation/reconciler.py#L130-L160)
 - **Code Snippet**:
   ```python
   @staticmethod
@@ -230,7 +230,7 @@ flowchart TD
 **Definition**: Window-based deduplication (`ROW_NUMBER() OVER (PARTITION BY natural_keys ORDER BY updated_at DESC)`) ensuring strictly one active record per business entity.
 
 **Project Implementation**:
-- **File**: [`src/transform/transformer.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/transform/transformer.py#L60-L90)
+- **File**: [`src/transform/transformer.py`](../src/transform/transformer.py#L60-L90)
 - **Code Snippet**:
   ```python
   window_spec = Window.partitionBy(*natural_keys).orderBy(*order_cols)
@@ -244,8 +244,8 @@ flowchart TD
 **Definition**: Aligning DataFrame schemas with target relational database schemas at runtime, auto-matching columns, and applying dialect-safe identifier quoting (MySQL backticks, Postgres double-quotes, Oracle raw).
 
 **Project Implementation**:
-- **File**: [`src/load/schema_validator.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/load/schema_validator.py#L45-L80)
-- **File**: [`src/utils/db_utils.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/utils/db_utils.py#L100-L120)
+- **File**: [`src/load/schema_validator.py`](../src/load/schema_validator.py#L45-L80)
+- **File**: [`src/utils/db_utils.py`](../src/utils/db_utils.py#L100-L120)
 
 ---
 
@@ -254,7 +254,7 @@ flowchart TD
 **Definition**: Translating source database column names and datatypes into standardized target schema columns based on metadata mapping rules.
 
 **Project Implementation**:
-- **File**: [`src/transform/column_mapper.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/transform/column_mapper.py#L30-L60)
+- **File**: [`src/transform/column_mapper.py`](../src/transform/column_mapper.py#L30-L60)
 
 ---
 
@@ -263,7 +263,7 @@ flowchart TD
 **Definition**: Two-tier parallelism: Outer level processes multiple independent database tables concurrently via Python `ThreadPoolExecutor`, while inner level extracts each table using multiple Spark partition tasks.
 
 **Project Implementation**:
-- **File**: [`src/orchestrator/etl.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/orchestrator/etl.py#L130-L160)
+- **File**: [`src/orchestrator/etl.py`](../src/orchestrator/etl.py#L130-L160)
 - **Code Snippet**:
   ```python
   with ThreadPoolExecutor(max_workers=self.max_parallel_tables) as executor:
@@ -282,7 +282,7 @@ flowchart TD
 **Definition**: Dynamically calculating optimal Spark partition counts and JDBC fetch sizes based on historical catalog row counts and table volume metrics.
 
 **Project Implementation**:
-- **File**: [`src/metadata/metadata_reader.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/metadata_reader.py#L70-L88)
+- **File**: [`src/metadata/metadata_reader.py`](../src/metadata/metadata_reader.py#L70-L88)
 - **Code Snippet**:
   ```sql
   LEAST(COALESCE(m.table_row_count, 100000), 500000)::integer AS chunk_size,
@@ -305,7 +305,7 @@ flowchart TD
 **Definition**: Unified schema alignment across heterogenous engines (Oracle, MySQL, PostgreSQL, SQL Server), mapping native data types dynamically.
 
 **Project Implementation**:
-- **File**: [`src/load/schema_validator.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/load/schema_validator.py#L90-L140)
+- **File**: [`src/load/schema_validator.py`](../src/load/schema_validator.py#L90-L140)
 
 ---
 
@@ -314,8 +314,8 @@ flowchart TD
 **Definition**: Enforcing Role-Based Access Control on database operations and externalizing all connection strings, usernames, and passwords to environment variables and vault references.
 
 **Project Implementation**:
-- **File**: [`src/security/authorization.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/security/authorization.py#L25-L60)
-- **File**: [`src/connections/connection_manager.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/connections/connection_manager.py#L140-L180)
+- **File**: [`src/security/authorization.py`](../src/security/authorization.py#L25-L60)
+- **File**: [`src/connections/connection_manager.py`](../src/connections/connection_manager.py#L140-L180)
 
 ---
 
@@ -324,8 +324,8 @@ flowchart TD
 **Definition**: A formal state model governing table pipeline runs: `RUNNING` $\rightarrow$ `EXTRACTING` $\rightarrow$ `BRONZE_WRITE` $\rightarrow$ `BRONZE_READ` $\rightarrow$ `TRANSFORM` $\rightarrow$ `SILVER_WRITE` $\rightarrow$ `GOLD_WRITE` $\rightarrow$ `SUCCESS` / `FAILED` / `CANCELLED` / `ABANDONED`.
 
 **Project Implementation**:
-- **File**: [`src/constants.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/constants.py#L40-L70)
-- **File**: [`src/logging_/batch_logger.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/logging_/batch_logger.py#L150-L210)
+- **File**: [`src/constants.py`](../src/constants.py#L40-L70)
+- **File**: [`src/logging_/batch_logger.py`](../src/logging_/batch_logger.py#L150-L210)
 
 ---
 
@@ -334,7 +334,7 @@ flowchart TD
 **Definition**: An intermediate database type mapping layer normalizing database types (e.g. Oracle `VARCHAR2`, MySQL `VAR_STRING`, Postgres `VARCHAR`) into a single Canonical Schema Model.
 
 **Project Implementation**:
-- **File**: [`src/metadata/canonical_types.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/canonical_types.py#L15-L65)
+- **File**: [`src/metadata/canonical_types.py`](../src/metadata/canonical_types.py#L15-L65)
 
 ---
 
@@ -343,7 +343,7 @@ flowchart TD
 **Definition**: Evaluating data quality assertions (Null checks, Uniqueness checks, Range checks) after layer writes with automated enforcement actions (`SKIP_TABLE`, `FAIL_SOURCE`, `FAIL_PIPELINE`).
 
 **Project Implementation**:
-- **File**: [`src/quality/dq_engine.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/quality/dq_engine.py#L30-L90)
+- **File**: [`src/quality/dq_engine.py`](../src/quality/dq_engine.py#L30-L90)
 
 ---
 
@@ -352,7 +352,7 @@ flowchart TD
 **Definition**: Tracking transformation flow and field origins from source tables through Medallion layers down to column-level granularity.
 
 **Project Implementation**:
-- **File**: [`src/metadata/lineage_service.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/lineage_service.py#L20-L80)
+- **File**: [`src/metadata/lineage_service.py`](../src/metadata/lineage_service.py#L20-L80)
 
 ---
 
@@ -361,7 +361,7 @@ flowchart TD
 **Definition**: Comparing live source database schemas against metadata catalog definitions, detecting added/dropped/altered columns, and executing controlled DDL updates.
 
 **Project Implementation**:
-- **File**: [`src/validation/schema_drift_detector.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/validation/schema_drift_detector.py#L40-L110)
+- **File**: [`src/validation/schema_drift_detector.py`](../src/validation/schema_drift_detector.py#L40-L110)
 
 ---
 
@@ -370,7 +370,7 @@ flowchart TD
 **Definition**: Inspecting source database statistics to automatically recommend optimal primary keys, natural keys, partition columns, and chunk sizes.
 
 **Project Implementation**:
-- **File**: [`src/metadata/recommendation_service.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/recommendation_service.py#L35-L95)
+- **File**: [`src/metadata/recommendation_service.py`](../src/metadata/recommendation_service.py#L35-L95)
 
 ---
 
@@ -379,7 +379,7 @@ flowchart TD
 **Definition**: Capturing microsecond-level timing and row-count metrics per pipeline stage, serializing metrics into `metadata.batch_log.stage_metrics` (JSONB).
 
 **Project Implementation**:
-- **File**: [`src/logging_/stage_profiler.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/logging_/stage_profiler.py#L30-L100)
+- **File**: [`src/logging_/stage_profiler.py`](../src/logging_/stage_profiler.py#L30-L100)
 
 ---
 
@@ -388,7 +388,7 @@ flowchart TD
 **Definition**: A background daemon thread (`BatchHeartbeatThread`) updating `last_progress_update` every 2 seconds alongside process exit signal handlers (`atexit`, `SIGTERM`, `SIGINT`).
 
 **Project Implementation**:
-- **File**: [`src/logging_/batch_logger.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/logging_/batch_logger.py#L22-L60)
+- **File**: [`src/logging_/batch_logger.py`](../src/logging_/batch_logger.py#L22-L60)
 
 ---
 
@@ -397,7 +397,7 @@ flowchart TD
 **Definition**: Managing database credentials dynamically from `metadata.connections` table with environment variable fallback resolution (`ConnectionService`).
 
 **Project Implementation**:
-- **File**: [`src/services/connection_service.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/services/connection_service.py#L40-L110)
+- **File**: [`src/services/connection_service.py`](../src/services/connection_service.py#L40-L110)
 
 ---
 

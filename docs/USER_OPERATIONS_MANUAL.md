@@ -1,4 +1,4 @@
-# Generic Metadata-Driven PySpark ETL Pipeline: User Manual
+# HiveFlow Platform: Operations & User Manual
 
 This manual provides comprehensive instructions and architectural references for operating, maintaining, and monitoring the Generic Metadata-Driven PySpark ETL Pipeline. This system leverages PostgreSQL metadata to orchestrate distributed data extraction, transformation, loading, Change Data Capture (CDC), and data reconciliation.
 
@@ -225,7 +225,7 @@ To promote a newly discovered source table to active subscriber ingestion contro
 
 ```sql
 SELECT * FROM metadata.db_tables
-WHERE database_tag = 'mysql_membership' AND table_name = 'inventory';
+WHERE database_tag = 'source_mysql' AND table_name = 'inventory';
 ```
 
 **Step 2**: Promote the table from Master to Control (`db_tables_etl`).
@@ -244,7 +244,7 @@ SELECT
     'y' AS is_active,
     CASE WHEN cdc_columns IS NOT NULL THEN 'y' ELSE 'n' END AS is_cdc
 FROM metadata.db_tables
-WHERE database_tag = 'mysql_membership' AND table_name = 'inventory';
+WHERE database_tag = 'source_mysql' AND table_name = 'inventory';
 ```
 
 **Step 3**: Insert column mappings into `db_columns_etl`.
@@ -272,13 +272,13 @@ FROM metadata.db_columns c
 JOIN metadata.db_tables_etl etl
     ON c.table_name = etl.source_table
    AND c.database_tag = etl.source_tag
-WHERE c.table_name = 'inventory' AND c.database_tag = 'mysql_membership';
+WHERE c.table_name = 'inventory' AND c.database_tag = 'source_mysql';
 ```
 
 **Step 4**: Run the pipeline to land the table.
 
 ```bash
-python jobs/run_source.py mysql_membership --config config/config.yaml
+python jobs/run_source.py source_mysql --config config/config.yaml
 ```
 
 **Step 5**: Verify the run in `batch_log`.
@@ -459,27 +459,27 @@ All pipeline operations are executed through the unified **`jobs/app_etl.py`** C
 **Full pipeline — Bronze + Silver + Gold (recommended):**
 ```bash
 # Run all three Medallion layers for priority 1 tables
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --config config/config.yaml
 
 # Run all priority tiers in sequence
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 1 --config config/config.yaml
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 2 --config config/config.yaml
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 3 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 2 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 3 --config config/config.yaml
 ```
 
 **Bronze (Landing) only:**
 ```bash
-python jobs/app_etl.py --source_tag mysql_membership --action load_historyData --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_historyData --priority 1 --config config/config.yaml
 ```
 
 **Silver (History) only:**
 ```bash
-python jobs/app_etl.py --source_tag mysql_membership --action load_historyData --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_historyData --priority 1 --config config/config.yaml
 ```
 
 **Gold (CDC incremental) only:**
 ```bash
-python jobs/app_etl.py --source_tag mysql_membership --action refresh_tables_cdc_12AM --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action refresh_tables_cdc_12AM --config config/config.yaml
 ```
 
 > [!NOTE]
@@ -491,15 +491,15 @@ To extract a single table (bypasses daily idempotency checks automatically), pas
 
 ```bash
 # Targeted single-table run (all 3 layers)
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 1 --table countries --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --table customers --config config/config.yaml
 
 # Bronze only for a single table
-python jobs/app_etl.py --source_tag mysql_membership --action load_historyData --priority 1 --table countries --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_historyData --priority 1 --table customers --config config/config.yaml
 ```
 
 To limit to a specific priority level:
 ```bash
-python jobs/app_etl.py --source_tag mysql_membership --action load_prioritywise --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --config config/config.yaml
 ```
 
 ### 5.3 Python API: Using `load_landing()` in Notebooks
@@ -508,13 +508,13 @@ You can import the landing pipeline entry point directly in Databricks notebooks
 ```python
 from jobs.run_landing import load_landing
 
-# Ingest all active tables for mysql_membership
-load_landing(source_tag="mysql_membership", config_path="config/config.yaml")
+# Ingest all active tables for source_mysql
+load_landing(source_tag="source_mysql", config_path="config/config.yaml")
 
-# Ingest only the countries table, bypassing idempotency checks
+# Ingest only the customers table, bypassing idempotency checks
 load_landing(
-    source_tag="mysql_membership",
-    table_name="countries",
+    source_tag="source_mysql",
+    table_name="customers",
     config_path="config/config.local.yaml"
 )
 ```
@@ -533,15 +533,15 @@ Use the `fix` action — no Spark required, instant response:
 
 ```bash
 # Force a table to re-run at next execution
-python jobs/app_etl.py --source_tag mysql_membership --action fix --table countries --operation rerun
+python jobs/app_etl.py --source_tag source_mysql --action fix --table customers --operation rerun
 ```
 
 Or via SQL directly:
 ```sql
 UPDATE metadata.db_tables_etl
    SET rerun_flag = 'y'
- WHERE source_tag = 'mysql_membership'
-   AND source_table = 'countries';
+ WHERE source_tag = 'source_mysql'
+   AND source_table = 'customers';
 ```
 
 ### 5.6 Reconciliation and Thresholds
@@ -605,7 +605,7 @@ Verify which tables are scheduled to ingest during the next pipeline execution:
 SELECT source_table, priority, table_type, last_success_date, rerun_flag
   FROM metadata.db_tables_etl
  WHERE is_active = 'y'
-   AND LOWER(source_tag) = 'mysql_membership'
+   AND LOWER(source_tag) = 'source_mysql'
    AND (
        rerun_flag = 'y'
        OR last_success_date IS NULL
@@ -630,17 +630,17 @@ If incremental CDC loads extract incorrect windows:
 
 - **Inspect current watermark** (using `app_etl.py` — no Spark required):
   ```bash
-  python jobs/app_etl.py --source_tag mysql_membership --action fix --table countries --operation check_watermark
+  python jobs/app_etl.py --source_tag source_mysql --action fix --table customers --operation check_watermark
   ```
   Or via SQL:
   ```sql
   SELECT source_table, last_success_timestamp 
     FROM metadata.db_tables_etl 
-   WHERE source_table = 'countries';
+   WHERE source_table = 'customers';
   ```
 - **Reset watermark to force a historical reload**:
   ```bash
-  python jobs/app_etl.py --source_tag mysql_membership --action fix --table countries --operation reset_watermark
+  python jobs/app_etl.py --source_tag source_mysql --action fix --table customers --operation reset_watermark
   ```
   Or via SQL:
   ```sql
@@ -648,7 +648,7 @@ If incremental CDC loads extract incorrect windows:
      SET last_success_timestamp = NULL,
          last_success_date = NULL,
          rerun_flag = 'y'
-   WHERE source_table = 'countries';
+   WHERE source_table = 'customers';
   ```
 
 ### 6.5 Common Errors and Resolutions
@@ -730,11 +730,11 @@ user = postgres
 password = secure_password
 port = 5432
 
-[mysql_membership]
+[source_mysql]
 db_type = MySQL
 db_driver = None
 server = localhost
-database = membership
+database = app_db
 schema = None
 user = root
 password = secure_password
@@ -806,8 +806,8 @@ To guarantee zero credential leakage and seamless portability across development
       table_name, 'full', 1, 
       'y', 'y', 0.00, 'FAIL'
     FROM metadata.db_tables
-   WHERE database_tag = 'mysql_membership'
-     AND table_name = 'countries'
+   WHERE database_tag = 'source_mysql'
+     AND table_name = 'customers'
   ON CONFLICT (source_tag, source_table) DO NOTHING;
   ```
 
@@ -819,7 +819,7 @@ To guarantee zero credential leakage and seamless portability across development
          cdc_columns = 'updated_at',
          cdc_p_days = 7,
          delta_days = 1
-   WHERE source_table = 'countries';
+   WHERE source_table = 'customers';
   ```
 
 - **Reset All Tables to Rerun (Manual Daily Override)**:
@@ -860,7 +860,7 @@ python jobs/discover_and_promote.py --config config/config.yaml
 
 **Manual Run (Specific Source):**
 ```bash
-python jobs/discover_and_promote.py --source_tag mysql_membership --config config/config.yaml
+python jobs/discover_and_promote.py --source_tag source_mysql --config config/config.yaml
 ```
 
 **Dry Run (Preview Changes):**
@@ -876,7 +876,7 @@ python jobs/discover_and_promote.py --deactivate-missing --config config/config.
 ### 9.3 Reviewing Discovered Items
 Review newly discovered tables and columns:
 ```bash
-python jobs/review_discovered.py --source_tag mysql_membership
+python jobs/review_discovered.py --source_tag source_mysql
 ```
 
 **SQL Queries:**
@@ -917,17 +917,17 @@ UPDATE metadata.db_columns_etl SET is_active='n' WHERE source_column='unwanted_c
 The crawler is scheduled via Airflow or cron:
 ```bash
 # Weekly on Sunday at 2 AM
-0 2 * * 0 cd /opt/ETL/spark/jobs/pyspark_pipeline && python jobs/discover_and_promote.py --config config/config.yaml >> /var/log/discovery.log 2>&1
+0 2 * * 0 cd /opt/hiveflow/platform && python jobs/discover_and_promote.py --config config/config.yaml >> /var/log/discovery.log 2>&1
 ```
 
 ---
 
-## 10. OPF Project Setup: `source_erp_db` → `land_n`
+## 10. End-to-End Reference Walkthrough: MySQL (`source_mysql`) → PostgreSQL (`target_warehouse`)
 
-This section documents the **specific, production configuration** for the OPF membership pipeline. The source is a live **MySQL** database (`source_erp_db`) and the target is a **PostgreSQL** landing schema (`land_n`), both hosted on the OPF infrastructure. This setup follows the standard Master-Subscriber Metadata Inheritance pattern described in Section 2.3.
+This section documents an end-to-end, production-grade reference configuration for extracting from a **MySQL** database (`source_mysql`) and publishing into a **PostgreSQL** warehouse schema (`target_warehouse`). This setup follows the standard Master-Subscriber Metadata Inheritance pattern described in Section 2.3.
 
 > [!IMPORTANT]
-> This section documents the OPF-specific configuration only. The pipeline code is generic and never changes. All behavior is controlled by entries in `databases.ini` and the `metadata.*` tables.
+> This reference deployment demonstrates end-to-end configuration. The pipeline code is 100% generic; all behavior is dynamically controlled by entries in `databases.ini` and the `metadata.*` tables.
 
 ---
 
@@ -935,15 +935,15 @@ This section documents the **specific, production configuration** for the OPF me
 
 ```
 [MySQL Source]                      [PostgreSQL — Dual Role]
-source_erp_db                          ┌──────────────────────────────────┐
-mysql.internal.net                        │  Repository DB (schema: metadata)  │
-source_membership_db  ──────► │  postgres / hiveflow_db               │
+source_mysql                          ┌──────────────────────────────────┐
+mysql.company.internal                        │  Repository DB (schema: metadata)  │
+source_app_db  ──────► │  postgres / hiveflow_db               │
                                     │  ETL control + audit tables        │
                                     └──────────────────────────────────┘
                                                │
                                                ▼ Spark JDBC writes
                                     ┌──────────────────────────────────┐
-                                    │  Target DB (schema: land_n)       │
+                                    │  Target DB (schema: target_warehouse)       │
                                     │  postgres / hiveflow_db               │
                                     │  Bronze Parquet landing files      │
                                     └──────────────────────────────────┘
@@ -952,43 +952,43 @@ source_membership_db  ──────► │  postgres / hiveflow_db         
 | Role | Tag | DB Type | Host | Database | Schema |
 |---|---|---|---|---|---|
 | **Metadata Repository** | `RepositoryDB` | PostgreSQL | `postgres` | `hiveflow_db` | `metadata` |
-| **Source** | `source_erp_db` | MySQL | `mysql.internal.net` | `source_membership_db` | `source_membership_db` |
-| **Target** | `land_n` | PostgreSQL | `postgres` | `hiveflow_db` | `land_n` |
+| **Source** | `source_mysql` | MySQL | `mysql.company.internal` | `source_app_db` | `source_app_db` |
+| **Target** | `target_warehouse` | PostgreSQL | `postgres` | `hiveflow_db` | `target_warehouse` |
 
 ---
 
 ### 10.2 `databases.ini` Configuration
 
-The `config/databases.ini` file holds all three connections. The `[RepositoryDB]` section is the metadata control database (identified by `metadata_db_section` in `config.yaml`). The `[source_erp_db]` section is the MySQL source. The `[land_n]` section defines the target PostgreSQL schema.
+The `config/databases.ini` file holds all three connections. The `[RepositoryDB]` section is the metadata control database (identified by `metadata_db_section` in `config.yaml`). The `[source_mysql]` section is the MySQL source. The `[target_warehouse]` section defines the target PostgreSQL schema.
 
 ```ini
-[land_n]
+[target_warehouse]
 db_type          = PostgresSQL
 db_driver        = None
 server           = postgres
 database         = hiveflow_db
-schema           = land_n
-user             = mg
-password         = 123
+schema           = warehouse
+user             = etl_service_user
+password         = ${POSTGRES_TARGET_PASSWORD}
 port             = 5432
 service          = None
-source_id        = PS002
+source_id        = PG_WH_01
 constant_class   = Constants_postgresql
 constant_metastore = postgress_metasoruce
 meta_db          = None
 meta_schema      = ddd
 
-[source_erp_db]
+[source_mysql]
 db_type          = MySQL
 db_driver        = None
-server           = mysql.internal.net
-database         = source_membership_db
-schema           = source_membership_db
-user             = source_app_user
-password         = <your_password>
+server           = mysql.company.internal
+database         = source_app_db
+schema           = source_app_db
+user             = mysql_reader_user
+password         = ${MYSQL_SOURCE_PASSWORD}
 port             = 3306
 service          = None
-source_id        = MS001
+source_id        = MYSQL_SRC_01
 constant_class   = Constants_mysql
 constant_metastore = mysql_metasource
 meta_db          = None
@@ -1000,20 +1000,20 @@ meta_schema      = ddd
 
 ---
 
-### 10.3 Metadata Entries for OPF Tables
+### 10.3 Metadata Entries for Reference Tables
 
-The following `metadata.db_tables_etl` entries define the five initial OPF membership tables. All tables target the `land_n` schema in PostgreSQL.
+The following `metadata.db_tables_etl` entries define five reference e-commerce tables targeting the `warehouse` schema in PostgreSQL.
 
 | `source_table` | `source_schema` | `priority` | `table_type` | `is_cdc` | `is_active` | `target_schema` | `landing_table` |
 |---|---|---|---|---|---|---|---|
-| `users` | `source_membership_db` | `1` | `full` | `n` | `y` | `land_n` | `lnd_users` |
-| `orders` | `source_membership_db` | `1` | `full` | `n` | `y` | `land_n` | `lnd_orders` |
-| `order_items` | `source_membership_db` | `2` | `full` | `n` | `y` | `land_n` | `lnd_order_items` |
-| `products` | `source_membership_db` | `2` | `full` | `n` | `y` | `land_n` | `lnd_products` |
-| `categories` | `source_membership_db` | `3` | `full` | `n` | `y` | `land_n` | `lnd_categories` |
+| `users` | `source_app_db` | `1` | `full` | `n` | `y` | `target_warehouse` | `lnd_users` |
+| `orders` | `source_app_db` | `1` | `full` | `n` | `y` | `target_warehouse` | `lnd_orders` |
+| `order_items` | `source_app_db` | `2` | `full` | `n` | `y` | `target_warehouse` | `lnd_order_items` |
+| `products` | `source_app_db` | `2` | `full` | `n` | `y` | `target_warehouse` | `lnd_products` |
+| `categories` | `source_app_db` | `3` | `full` | `n` | `y` | `target_warehouse` | `lnd_categories` |
 
 > [!NOTE]
-> The `source_tag` for every row is `source_erp_db`. This value must exactly match the `[source_erp_db]` section name in `databases.ini`.
+> The `source_tag` for every row is `source_mysql`. This value must exactly match the `[source_mysql]` section name in `databases.ini`.
 
 ---
 
@@ -1021,15 +1021,15 @@ The following `metadata.db_tables_etl` entries define the five initial OPF membe
 
 #### Step 1 — Verify `databases.ini` Sections
 
-Confirm `databases.ini` contains `[RepositoryDB]`, `[source_erp_db]`, and `[land_n]` with correct host/port/credentials (see Section 10.2).
+Confirm `databases.ini` contains `[RepositoryDB]`, `[source_mysql]`, and `[target_warehouse]` with correct host/port/credentials (see Section 10.2).
 
 #### Step 2 — Apply the Schema Migration DDL
 
 If the metadata schema does not yet exist, apply the migrations once to create all control tables:
 
 ```bash
-psql -h postgres -U mg -d hiveflow_db -f migrations/001_master_subscriber_schema.sql
-psql -h postgres -U mg -d hiveflow_db -f migrations/002_reconciliation_idempotency.sql
+psql -h postgres -U etl_admin -d hiveflow_metadata -f migrations/001_master_subscriber_schema.sql
+psql -h postgres -U etl_admin -d hiveflow_metadata -f migrations/002_reconciliation_idempotency.sql
 ```
 
 #### Step 3 — Verify the Schema
@@ -1044,18 +1044,18 @@ SELECT table_name
 
 #### Step 4A — Crawl the Source (Recommended)
 
-Run the automated discovery crawler to discover all tables and columns in `source_erp_db`:
+Run the automated discovery crawler to discover all tables and columns in `source_mysql`:
 
 ```bash
 # Preview changes first (no DB writes)
 python jobs/discover_and_promote.py \
-    --source_tag source_erp_db \
+    --source_tag source_mysql \
     --dry-run \
     --config config/config.yaml
 
 # Execute — inserts tables as is_active='n', columns as is_active='y'
 python jobs/discover_and_promote.py \
-    --source_tag source_erp_db \
+    --source_tag source_mysql \
     --config config/config.yaml
 ```
 
@@ -1065,19 +1065,19 @@ Then activate the tables you want to land:
 -- Activate Priority 1 tables
 UPDATE metadata.db_tables_etl
    SET is_active = 'y', priority = 1
- WHERE source_tag   = 'source_erp_db'
+ WHERE source_tag   = 'source_mysql'
    AND source_table IN ('users', 'orders');
 
 -- Activate Priority 2 tables
 UPDATE metadata.db_tables_etl
    SET is_active = 'y', priority = 2
- WHERE source_tag   = 'source_erp_db'
+ WHERE source_tag   = 'source_mysql'
    AND source_table IN ('order_items', 'products');
 
 -- Activate Priority 3 tables
 UPDATE metadata.db_tables_etl
    SET is_active = 'y', priority = 3
- WHERE source_tag   = 'source_erp_db'
+ WHERE source_tag   = 'source_mysql'
    AND source_table IN ('categories');
 ```
 
@@ -1095,8 +1095,8 @@ INSERT INTO metadata.db_tables_etl (
     cdc_p_days, delta_days, is_reconcile,
     created_at, updated_at
 ) VALUES (
-    'source_erp_db', 'source_membership_db', 'users',
-    'hiveflow_db', 'land_n', 'users', 'lnd_users', 'hist_users',
+    'source_mysql', 'source_app_db', 'users',
+    'hiveflow_db', 'target_warehouse', 'users', 'lnd_users', 'hist_users',
     'full', 1, 'y', 'n',
     7, 1, 'n',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -1132,7 +1132,7 @@ SELECT
   JOIN metadata.db_tables_etl etl
     ON c.table_name   = etl.source_table
    AND c.database_tag = etl.source_tag
- WHERE c.database_tag = 'source_erp_db'
+ WHERE c.database_tag = 'source_mysql'
    AND c.table_name   = 'users'
 ON CONFLICT (table_id, source_column) DO NOTHING;
 ```
@@ -1148,7 +1148,7 @@ Run these before executing the pipeline to confirm all metadata is correctly con
 SELECT table_id, source_tag, source_table, target_schema, priority,
        is_active, is_cdc, landing_table, discovered_at
   FROM metadata.db_tables_etl
- WHERE source_tag = 'source_erp_db'
+ WHERE source_tag = 'source_mysql'
  ORDER BY priority, source_table;
 
 -- 2. Check column mapping counts per table
@@ -1157,13 +1157,13 @@ SELECT etl.source_table,
        SUM(CASE WHEN col.is_active = 'y' THEN 1 ELSE 0 END) AS active_columns
   FROM metadata.db_columns_etl col
   JOIN metadata.db_tables_etl  etl ON col.table_id = etl.table_id
- WHERE etl.source_tag = 'source_erp_db'
+ WHERE etl.source_tag = 'source_mysql'
  GROUP BY etl.source_table ORDER BY etl.source_table;
 
 -- 3. Check which tables will run at next execution
 SELECT source_table, priority, last_success_date, rerun_flag
   FROM metadata.db_tables_etl
- WHERE source_tag = 'source_erp_db'
+ WHERE source_tag = 'source_mysql'
    AND is_active  = 'y'
    AND (rerun_flag = 'y' OR last_success_date IS NULL OR last_success_date < CURRENT_DATE)
  ORDER BY priority;
@@ -1171,36 +1171,36 @@ SELECT source_table, priority, last_success_date, rerun_flag
 
 ---
 
-### 10.6 Running the OPF Pipeline
+### 10.6 Running the Pipeline
 
 Once metadata is configured and verified, use `app_etl.py` as the primary CLI:
 
 ```bash
 # ── Full pipeline (Bronze + Silver + Gold) ────────────────────────────────
 # Priority 1 (users, orders)
-python jobs/app_etl.py --source_tag source_erp_db --action load_prioritywise --priority 1 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --config config/config.yaml
 
 # Priority 2 (order_items, products)
-python jobs/app_etl.py --source_tag source_erp_db --action load_prioritywise --priority 2 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 2 --config config/config.yaml
 
 # Priority 3 (categories)
-python jobs/app_etl.py --source_tag source_erp_db --action load_prioritywise --priority 3 --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 3 --config config/config.yaml
 
 # ── Single-table targeted run (bypasses daily skip check) ─────────────────
-python jobs/app_etl.py --source_tag source_erp_db --action load_prioritywise --priority 1 --table users --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --table users --config config/config.yaml
 
 # ── CDC Gold incremental only ─────────────────────────────────────────────
-python jobs/app_etl.py --source_tag source_erp_db --action refresh_tables_cdc_12AM --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action refresh_tables_cdc_12AM --config config/config.yaml
 
 # ── Discovery sync (dry-run first, then execute) ──────────────────────────
-python jobs/app_etl.py --source_tag source_erp_db --action sync --dry-run --config config/config.yaml
-python jobs/app_etl.py --source_tag source_erp_db --action sync --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action sync --dry-run --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action sync --config config/config.yaml
 
 # ── Fix: inspect table state ──────────────────────────────────────────────
-python jobs/app_etl.py --source_tag source_erp_db --action fix --table users --operation check_watermark --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action fix --table users --operation check_watermark --config config/config.yaml
 
 # ── Fix: force a failed table to rerun ────────────────────────────────────
-python jobs/app_etl.py --source_tag source_erp_db --action fix --table users --operation rerun --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action fix --table users --operation rerun --config config/config.yaml
 ```
 
 **Monitor execution outcome:**
@@ -1208,7 +1208,7 @@ python jobs/app_etl.py --source_tag source_erp_db --action fix --table users --o
 SELECT source_table, status, source_count, target_count,
        gap, load_pct, elapsed_seconds, error_message
   FROM metadata.batch_log
- WHERE source_tag = 'source_erp_db'
+ WHERE source_tag = 'source_mysql'
  ORDER BY id DESC LIMIT 10;
 ```
 
@@ -1220,7 +1220,7 @@ After a successful Bronze run, files are written under the landing base path fro
 
 ```
 /opt/ETL/data/landing/
-└── source_erp_db/
+└── source_mysql/
     ├── lnd_users/
     │   └── dt=2026-06-29/
     │       └── part-00000-*.snappy.parquet
@@ -1243,17 +1243,17 @@ After a successful Bronze run, files are written under the landing base path fro
 
 ---
 
-### 10.8 Troubleshooting OPF-Specific Issues
+### 10.8 Troubleshooting Reference Pipeline Issues
 
 | Symptom | Likely Cause | Resolution |
 |---|---|---|
-| `Connection refused` to MySQL at `mysql.internal.net:3306` | Firewall rule or wrong credentials | Verify the `[source_erp_db]` section `server`, `port`, `user`, `password`. Test with `mysql -h mysql.internal.net -u source_app_user -p source_membership_db`. |
-| `FATAL: role "mg" does not exist` on PostgreSQL | Wrong user in `[land_n]` or `[RepositoryDB]` section | Confirm PostgreSQL user `mg` exists: `SELECT usename FROM pg_user;` |
-| `No tables found for source_tag='source_erp_db'` | Metadata not promoted yet | Run `discover_and_promote.py` or insert rows manually per Section 10.4. |
-| Pipeline skips all tables with no error | Tables already landed today (`last_success_date = CURRENT_DATE`) | Force rerun: `UPDATE metadata.db_tables_etl SET rerun_flag='y' WHERE source_tag='source_erp_db';` |
+| `Connection refused` to MySQL at `mysql.company.internal:3306` | Firewall rule or wrong credentials | Verify the `[source_mysql]` section `server`, `port`, `user`, `password`. Test with `mysql -h mysql.company.internal -u mysql_reader_user -p source_app_db`. |
+| `FATAL: role "etl_service_user" does not exist` on PostgreSQL | Wrong user in `[target_warehouse]` or `[RepositoryDB]` section | Confirm PostgreSQL user `etl_service_user` exists: `SELECT usename FROM pg_user;` |
+| `No tables found for source_tag='source_mysql'` | Metadata not promoted yet | Run `discover_and_promote.py` or insert rows manually per Section 10.4. |
+| Pipeline skips all tables with no error | Tables already landed today (`last_success_date = CURRENT_DATE`) | Force rerun: `UPDATE metadata.db_tables_etl SET rerun_flag='y' WHERE source_tag='source_mysql';` |
 | `ON CONFLICT` violation during manual promotion | Duplicate `(source_tag, source_table)` — already exists | Use `ON CONFLICT DO NOTHING` in your INSERT, or use `--force` with `promote_table.py` to re-sync. |
 | MySQL JDBC driver not found | Driver JAR missing from Spark classpath | Ensure `mysql-connector-java-*.jar` is in `$SPARK_HOME/jars/` or passed via `--jars`. |
-| Tables found but 0 rows extracted | Source MySQL firewall restricts `SELECT` on that schema | Verify the `source_app_user` user has `SELECT` privileges on `source_membership_db.*`. |
+| Tables found but 0 rows extracted | Source MySQL firewall restricts `SELECT` on that schema | Verify the `mysql_reader_user` user has `SELECT` privileges on `source_app_db.*`. |
 
 ---
 
@@ -1267,7 +1267,7 @@ When ingesting raw data from source systems without executing downstream transfo
 
 ```bash
 # Run Bronze raw landing only for Priority 1 tables
-python jobs/app_etl.py --source_tag source_erp_db --action load_prioritywise --priority 1 --run_silver false --config config/config.yaml
+python jobs/app_etl.py --source_tag source_mysql --action load_prioritywise --priority 1 --run_silver false --config config/config.yaml
 ```
 
 When `--run_silver false` is passed:
@@ -1302,14 +1302,14 @@ SELECT run_id, source_tag, layer, status,
 To route a table's processed output to a specific relational database (PostgreSQL, Oracle, SQL Server, MySQL), set `target_tag` in `metadata.db_tables_etl` to match a section in `databases.ini`:
 
 ```sql
--- Route the currencies table to the land_n database section in databases.ini
+-- Route the currencies table to the target_warehouse database section in databases.ini
 UPDATE metadata.db_tables_etl
-   SET target_tag = 'land_n'
- WHERE source_table = 'currencies' AND source_tag = 'source_erp_db';
+   SET target_tag = 'target_warehouse'
+ WHERE source_table = 'currencies' AND source_tag = 'source_mysql';
 ```
 
 When `write_target()` executes:
-1. It looks up `[land_n]` in `databases.ini` and establishes a JDBC connection.
+1. It looks up `[target_warehouse]` in `databases.ini` and establishes a JDBC connection.
 2. It writes data to a temporary staging table (`{target_table}_stg_{uuid_8}`).
 3. It executes a dialect-specific atomic MERGE (`ON CONFLICT` for Postgres, `MERGE INTO` for Oracle/SQL Server, `ON DUPLICATE KEY UPDATE` for MySQL).
 4. It drops the temporary staging table automatically.
@@ -1326,14 +1326,14 @@ Spark automatically calculates JDBC extraction partition counts based on table s
 -- Force Spark to extract the users table using exactly 16 parallel JDBC partitions
 UPDATE metadata.db_tables_etl
    SET num_partitions_override = 16
- WHERE source_table = 'users' AND source_tag = 'source_erp_db';
+ WHERE source_table = 'users' AND source_tag = 'source_mysql';
 ```
 
 To revert back to self-tuning automatic partition calculations, set the override back to `NULL`:
 ```sql
 UPDATE metadata.db_tables_etl
    SET num_partitions_override = NULL
- WHERE source_table = 'users' AND source_tag = 'source_erp_db';
+ WHERE source_table = 'users' AND source_tag = 'source_mysql';
 ```
 
 

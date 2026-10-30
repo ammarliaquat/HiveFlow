@@ -25,19 +25,19 @@ The pipeline never hardcodes table names, source connection strings, column defi
 ### Core Architectural Principles
 
 - **P1: Metadata-Driven Execution:** Pipeline execution rules (watermarks, CDC strategies, partition bounds, target schemas) are driven dynamically by control tables (`metadata.db_tables_etl`).
-- **P2: Self-Contained Metadata Rows ([ADR-001](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-001_controlled_denormalization.md)):** `MetadataRow` contains all table/connection attributes to avoid runtime database joins during high-throughput Spark operations.
-- **P3: Two-Tier Catalog Architecture ([ADR-003](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-003_two_tier_catalog.md)):** Automated crawlers write exclusively to Tier 1 (`metadata.db_tables`). Tier 2 (`metadata.db_tables_etl`) activation requires human steward promotion via `jobs/promote_table.py` or GUI Page 07.
+- **P2: Self-Contained Metadata Rows ([ADR-001]):** `MetadataRow` contains all table/connection attributes to avoid runtime database joins during high-throughput Spark operations.
+- **P3: Two-Tier Catalog Architecture ([ADR-003]):** Automated crawlers write exclusively to Tier 1 (`metadata.db_tables`). Tier 2 (`metadata.db_tables_etl`) activation requires human steward promotion via `jobs/promote_table.py` or GUI Page 07.
 - **P4: Decoupled DDL Schema Execution:** Target table DDL schema creation and column migrations run deterministically during pre-flight preparation, keeping runtime write streams strictly DML (`INSERT` / `MERGE` / `UPSERT`).
-- **P5: Idempotency & Reconciliation Overflow Guard ([ADR-004](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-004_reconciliation_overflow_guard.md)):** All executions are idempotent. Count mismatches flag automatic retry (`rerun_flag='y'`) without updating `last_success_date`.
+- **P5: Idempotency & Reconciliation Overflow Guard ([ADR-004]):** All executions are idempotent. Count mismatches flag automatic retry (`rerun_flag='y'`) without updating `last_success_date`.
 - **P6: Centralized Stream Security & PII Redaction:** Outbound telemetry and tracebacks automatically redact PII patterns via `GovernedLogFormatter`. Password environment variables enforce non-fallback policies (`ConfigurationError`).
-- **P7: Single Extraction Architecture ([ADR-002](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-002_parquet_bronze_format.md)):** Extracting from source databases occurs exactly once per run into Bronze Parquet files. Downstream Silver history deduplication reads landed Bronze Parquet directly without re-querying source databases.
+- **P7: Single Extraction Architecture ([ADR-002]):** Extracting from source databases occurs exactly once per run into Bronze Parquet files. Downstream Silver history deduplication reads landed Bronze Parquet directly without re-querying source databases.
 
 ---
 
 ## 2. Folder Structure
 
 ```text
-pyspark_pipeline/
+hiveflow-platform/
 ├── config/
 │   ├── config.yaml                ← Base pipeline paths, settings, database_ini_path reference
 │   ├── config.local.yaml          ← Local development overrides
@@ -118,7 +118,7 @@ MySQL DB          ──JDBC──►    source_tag/table/dt=date/              
 
 | Layer | Alias | Storage Format | Contract & Responsibilities |
 |-------|-------|----------------|-----------------------------|
-| **Bronze** | Landing | Snappy Parquet ([**ADR-002**](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-002_parquet_bronze_format.md)) | Immutable, raw snapshot of source data. No transformations applied. Exact source replica partitioned by date. |
+| **Bronze** | Landing | Snappy Parquet ([**ADR-002**]) | Immutable, raw snapshot of source data. No transformations applied. Exact source replica partitioned by date. |
 | **Silver** | History | Parquet / Delta | Deduplicated on business natural keys (`normalized_natural_key`), typed & cast, lineage audit columns appended (`row_hash`, `_dw_key`). |
 | **Gold** | Target | PostgreSQL / Delta MERGE | Business-ready analytics models. High-throughput DML (`INSERT` / `MERGE` / `UPSERT`). Target table DDL schema provisioning runs during pre-flight. |
 
@@ -337,15 +337,15 @@ CREATE TABLE metadata.batch_log (
 
 | Component | Module Path | Core Responsibility |
 |-----------|-------------|---------------------|
-| `SparkSessionFactory` | [`src/spark_session.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/spark_session.py) | Configures SparkSession builder; supports Spark Connect container routing. |
-| `ConnectionManager` | [`src/connections/connection_manager.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/connections/connection_manager.py) | Parses INI section profiles; enforces role-based access & non-fallback credentials (**Defect D-004**). |
-| `MetadataReader` | [`src/metadata/metadata_reader.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/metadata/metadata_reader.py) | Queries Tier 2 metadata catalog, constructing self-contained `MetadataRow` objects ([**ADR-001**](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-001_controlled_denormalization.md)). |
-| `Extractor` | [`src/extract/extractor.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/extract/extractor.py) | Reads source table via JDBC using adaptive partitioning bounds into Bronze Parquet. |
-| `Transformer` | [`src/transform/transformer.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/transform/transformer.py) | Trims composite natural keys (`normalized_natural_key`), deduplicates, casts types, appends audit columns (**Defect D-001**). |
-| `Loader` | [`src/load/loader.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/load/loader.py) | Executes pre-flight target table DDL schema creation; writes Gold DML (`INSERT` / `UPSERT` / `MERGE`) (**Change C.1**). |
-| `Reconciler` | [`src/validation/reconciler.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/validation/reconciler.py) | Verifies row count thresholds between source and target layers ([**ADR-004**](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-004_reconciliation_overflow_guard.md)). |
-| `CDCHandler` | [`src/cdc/cdc_handler.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/cdc/cdc_handler.py) | Computes watermark bounds; enforces mutation-capable CDC timestamp rules (**Defect D-002**). |
-| `GovernedLogFormatter` | [`src/security/data_governance.py`](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/src/security/data_governance.py) | Wraps logger StreamHandlers to scrub PII and secrets before console/file emission (**Defect D-003**). |
+| `SparkSessionFactory` | [`src/spark_session.py`](../src/spark_session.py) | Configures SparkSession builder; supports Spark Connect container routing. |
+| `ConnectionManager` | [`src/connections/connection_manager.py`](../src/connections/connection_manager.py) | Parses INI section profiles; enforces role-based access & non-fallback credentials (**Defect D-004**). |
+| `MetadataReader` | [`src/metadata/metadata_reader.py`](../src/metadata/metadata_reader.py) | Queries Tier 2 metadata catalog, constructing self-contained `MetadataRow` objects ([**ADR-001**]). |
+| `Extractor` | [`src/extract/extractor.py`](../src/extract/extractor.py) | Reads source table via JDBC using adaptive partitioning bounds into Bronze Parquet. |
+| `Transformer` | [`src/transform/transformer.py`](../src/transform/transformer.py) | Trims composite natural keys (`normalized_natural_key`), deduplicates, casts types, appends audit columns (**Defect D-001**). |
+| `Loader` | [`src/load/loader.py`](../src/load/loader.py) | Executes pre-flight target table DDL schema creation; writes Gold DML (`INSERT` / `UPSERT` / `MERGE`) (**Change C.1**). |
+| `Reconciler` | [`src/validation/reconciler.py`](../src/validation/reconciler.py) | Verifies row count thresholds between source and target layers ([**ADR-004**]). |
+| `CDCHandler` | [`src/cdc/cdc_handler.py`](../src/cdc/cdc_handler.py) | Computes watermark bounds; enforces mutation-capable CDC timestamp rules (**Defect D-002**). |
+| `GovernedLogFormatter` | [`src/security/data_governance.py`](../src/security/data_governance.py) | Wraps logger StreamHandlers to scrub PII and secrets before console/file emission (**Defect D-003**). |
 
 ---
 
@@ -379,7 +379,7 @@ port = 5432
 
 ## 8. Reconciliation, Idempotency & Overflow Guards
 
-- **Reconciliation Overflow Guard ([**ADR-004**](file:///c:/Users/Administrator/Pictures/landing_pipeline/data_pipeline/spark/jobs/pyspark_pipeline/.brain/adr/ADR-004_reconciliation_overflow_guard.md)):** When row count discrepancies exceed `reconcile_threshold`, `Reconciler` raises `ReconciliationError`, setting `rerun_flag = 'y'` without updating `last_success_date`.
+- **Reconciliation Overflow Guard ([**ADR-004**]):** When row count discrepancies exceed `reconcile_threshold`, `Reconciler` raises `ReconciliationError`, setting `rerun_flag = 'y'` without updating `last_success_date`.
 - **Orchestration Retry State Guard (**Defect D-005**):** Orchestration retry queries exclude `SUCCESS`, `SKIPPED`, and `DEPENDENCY_FAILED` tables, guaranteeing exactly **1 log record per table run ID** in `metadata.batch_log`.
 
 ---
@@ -390,7 +390,7 @@ The pipeline includes a dedicated Streamlit web console under `gui/` (`streamlit
 
 - **Zero DB Logic Drift:** Reads credentials dynamically from `ConnectionManager` (`src/connections/connection_manager.py`) using `.env` + `databases.ini`.
 - **13 Operational Pages:** Covers KPI Dashboard (`Page 01`), Metadata Explorer (`Page 02`), Table Details (`Page 03`), Batch Run Audit Logs (`Page 04`), Analytics Summary (`Page 05`), Alert Center (`Page 06`), Discovery & Steward Promotion (`Page 07`), Connection Manager Profile Editor (`Page 08`), Pipeline Execution Trigger Console (`Page 09`), Active Job Queue Monitor (`Page 10`), CDC Maintenance & Watermark Controls (`Page 11`), Infrastructure Health Checks (`Page 12`), and Protected Reset Tools (`Page 13`).
-- **Operational Manual:** Complete launch parameters and page-by-page operational instructions are documented in [**`ETL_EXECUTION_MANUAL.md`**](file:///c:/Users/Administrator/Pictures/landing_pipeline/ETL_EXECUTION_MANUAL.md#10-step-9-streamlit-operations-dashboard-gui-manual).
+- **Operational Manual:** Complete launch parameters and page-by-page operational instructions are documented in [**`ETL_EXECUTION_MANUAL.md`**](ETL_EXECUTION_MANUAL.md#10-step-9-streamlit-operations-dashboard-gui-manual).
 
 ---
 
@@ -398,7 +398,7 @@ The pipeline includes a dedicated Streamlit web console under `gui/` (`streamlit
 
 ```sql
 CREATE TABLE IF NOT EXISTS metadata.connections (
-    tag VARCHAR(100) PRIMARY KEY,                                      -- e.g., 'msopforg_opforg', 'land_n'
+    tag VARCHAR(100) PRIMARY KEY,                                      -- e.g., 'source_mysql', 'target_warehouse'
     connection_type VARCHAR(50) NOT NULL DEFAULT 'DATABASE',           -- 'DATABASE', 'FILE', 'API', etc.
     supports_source BOOLEAN NOT NULL DEFAULT true,
     supports_target BOOLEAN NOT NULL DEFAULT false,
@@ -409,7 +409,7 @@ CREATE TABLE IF NOT EXISTS metadata.connections (
     database_name VARCHAR(200) NOT NULL,
     schema_name VARCHAR(200),
     username VARCHAR(100) NOT NULL,
-    credential_reference VARCHAR(255) NOT NULL,                        -- e.g. '${MSOPFORG_DB_PASSWORD}' or 'env://POSTGRES_PASSWORD'
+    credential_reference VARCHAR(255) NOT NULL,                        -- e.g. '${SOURCE_DB_PASSWORD}' or 'env://POSTGRES_PASSWORD'
     service_name VARCHAR(100),                                         -- For Oracle DSN or service string
     connection_options JSONB DEFAULT '{}'::jsonb,                      -- e.g. {"sslmode": "require", "fetchSize": 10000}
     
@@ -472,7 +472,7 @@ CREATE TABLE IF NOT EXISTS metadata.notifications (
     message TEXT NOT NULL,
     
     -- Cross-Run Correlation & Deduplication
-    correlation_key VARCHAR(150),                -- e.g. 'connection_failure:msopforg_opforg' or 'load_failed:msopforg_opforg.Membership'
+    correlation_key VARCHAR(150),                -- e.g. 'connection_failure:source_mysql' or 'load_failed:source_mysql.customers'
     affected_count INTEGER DEFAULT 1,            -- Number of times or tables aggregated into this open incident
     
     -- Direct Context & Log Links

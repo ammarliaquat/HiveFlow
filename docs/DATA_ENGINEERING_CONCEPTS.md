@@ -1,5 +1,5 @@
 # Evidence-Based Data Engineering Architecture & Concepts Guide
-**Repository:** `data_pipeline/spark/jobs/pyspark_pipeline`
+**Repository:** `HiveFlow Platform`
 **Document Classification:** Current-Code Reference & Static Architecture Audit — not a release or production certification
 **Author:** Senior Data Engineering Architect & Systems Auditor
 **Audit Standard:** Strict Workspace Evidence (`.agents/rules/code_review.md`, `.agents/rules/ponytail.md`, `.brain/standards/`)
@@ -958,7 +958,7 @@ flowchart TD
   - **Authoritative Key Approval:** Enforced via `src/metadata/key_contract.py`. Business keys cannot be guessed at runtime. They must be derived from authoritative physical primary keys, unique constraints, or explicitly approved data profiling evidence. Provenance is tracked in `metadata.table_business_key_approval` with approval revisions, timestamps, and actor IDs.
   - **Entity-Scoped Natural Key Hierarchy (`IDENTITY-01`):** Formats natural keys with clean entity scoping: `{source_tag}_{source_table}_{keys}` where composite key columns are separated by underscores.
   - **Spark NULL-Collapse Protection:** Wraps all composite key components in null-coalescing expressions (`COALESCE(col, '')`) prior to concatenation, preventing NULL column values from collapsing distinct records.
-  - **Deterministic Synthetic Keys for Keyless Tables:** For tables lacking natural business keys (e.g. `tbltd`, `fapplicant`), generates a deterministic 16-character MD5 hash of non-audit row content: `{source_tag}_{source_table}_synthetic_{hash16}`, completely eliminating silent deduplication collapse.
+  - **Deterministic Synthetic Keys for Keyless Tables:** For tables lacking natural business keys (e.g. `event_logs`, `audit_trail_events`), generates a deterministic 16-character MD5 hash of non-audit row content: `{source_tag}_{source_table}_synthetic_{hash16}`, completely eliminating silent deduplication collapse.
   - **Prefix Sanitization:** Uses clean, standard namespacing without arbitrary `urn_` prefixes.
 - **Actual files, functions, classes, tables, or migrations involved:**
   - `src/metadata/key_contract.py:18-65`: `ApprovedBusinessKey`, `KeyEvidenceType`, `ResolvedTargetBusinessKey`.
@@ -1204,12 +1204,12 @@ flowchart TD
 - **Runtime Convergence:**
   - Whether a table enters execution with `cdc_strategy = 'FULL_LOAD'` (no cursor exists) or `cdc_strategy = 'TIMESTAMP_HIGH_WATERMARK'` with `is_cdc = 'n'` (candidate failed health gates), both resolve to `FULL_SNAPSHOT` and execute the exact same query: **`SELECT * FROM source_table`** on every run.
 
-#### 12.2 Real-World RCA Case Study: Profiling & Invariant Evaluation on `03042025tblconvention`
+#### 12.2 Real-World RCA Case Study: Profiling & Invariant Evaluation on `event_registrations`
 An incident in production illustrated how these rules protect downstream data integrity:
 
-- **Observed Metadata Record (Source: MySQL `source_erp_db`):**
-  - `table_name`: `03042025tblconvention`
-  - `business_key`: `CONVENTION_ID` (`key_confidence = 100`, `duplicate_count = 0`)
+- **Observed Metadata Record (Source: MySQL `source_mysql`):**
+  - `table_name`: `event_registrations`
+  - `business_key`: `REGISTRATION_ID` (`key_confidence = 100`, `duplicate_count = 0`)
   - `cdc_columns`: `MODIFIEDDATE`
   - `cdc_strategy`: `TIMESTAMP_HIGH_WATERMARK`
   - `cdc_confidence`: `98`
@@ -1222,7 +1222,7 @@ An incident in production illustrated how these rules protect downstream data in
   $$\text{Score} = 30\,(\text{datatype}) + 18\,(\text{null fraction: } 8.92\%) + 20\,(\text{distinct variation}) + 20\,(\text{freshness}) + 10\,(\text{physical key}) = 98$$
 
 - **Root Cause Analysis (Why `is_cdc` is `'n'` Despite Score 98):**
-  1. The table passed Gate 1 (verified primary key `CONVENTION_ID`).
+  1. The table passed Gate 1 (verified primary key `REGISTRATION_ID`).
   2. The table passed Gate 3 ($\text{confidence } 98 \ge 90$).
   3. **The table FAILED Gate 2 (Strict Zero NULL Invariant):**
      $$\text{null\_cnt} = 85 \ne 0 \implies \text{Gate 2 Violation}$$
@@ -1230,10 +1230,10 @@ An incident in production illustrated how these rules protect downstream data in
   5. The profiler therefore assigned `is_cdc = 'n'` and flagged `cdc_health = 'WARNING'`.
 
 - **Operational Impact & Protection:**
-  This strict gate prevented catastrophic silent data loss. If `is_cdc` had been enabled, the pipeline would have extracted records using `WHERE MODIFIEDDATE > :last_watermark`. The 85 convention records with `NULL MODIFIEDDATE` would **never have satisfied this predicate and would have been permanently omitted from analytical reporting**.
+  This strict gate prevented catastrophic silent data loss. If `is_cdc` had been enabled, the pipeline would have extracted records using `WHERE MODIFIEDDATE > :last_watermark`. The 85 registration records with `NULL MODIFIEDDATE` would **never have satisfied this predicate and would have been permanently omitted from analytical reporting**.
 
 - **Operator Remediation:**
-  1. **Source Backfill:** Execute `UPDATE source_erp_db.03042025tblconvention SET MODIFIEDDATE = CREATEDDATE WHERE MODIFIEDDATE IS NULL;` in the source database.
+  1. **Source Backfill:** Execute `UPDATE source_mysql.event_registrations SET MODIFIEDDATE = CREATEDDATE WHERE MODIFIEDDATE IS NULL;` in the source database.
   2. **Re-Profile:** Trigger a discovery crawl. With `null_cnt = 0`, the table immediately passes Gate 2, flips `is_cdc` to `'y'`, marks `cdc_health = 'OK'`, and activates automated incremental extraction.
 
 ---
@@ -1792,7 +1792,7 @@ An incident in production illustrated how these rules protect downstream data in
 
 **Certification performed on 2026-09-04**
 
-- **TEST VERIFIED:** `C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python39\\python.exe -m pytest tests/test_zero_hardcoding.py tests/test_schema_certifier.py -q -rs` returned **347 passed, 1 skipped** in 2.88 seconds. The skipped check requires `config/databases.ini`, which is absent from this workspace.
+- **TEST VERIFIED:** `pytest tests/test_zero_hardcoding.py tests/test_schema_certifier.py -q -rs` returned **347 passed, 1 skipped** in 2.88 seconds. The skipped check requires `config/databases.ini`, which is absent from this workspace.
 - **STATIC VERIFIED:** `SchemaCertifier.CANONICAL_MIGRATIONS` contains 52 files representing 46 unique migration-ledger versions.
 - **STATIC VERIFIED:** `src/extract/snapshot_extractor.py`, `AtomicSnapshotCommitter`, and `src/contracts/deployment_profile.py` are absent from the current workspace.
 - **STATIC VERIFIED:** 84 repository paths referenced in this document were checked. The only missing references are the two intentionally documented gaps above: `src/extract/snapshot_extractor.py` and `src/contracts/deployment_profile.py`.
